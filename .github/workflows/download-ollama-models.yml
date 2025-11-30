@@ -186,7 +186,7 @@ jobs:
       - name: Upload model as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ollama-model-${{ github.event.inputs.model }}-${{ github.run_number }}
+          name: ollama-model-${{ replace(github.event.inputs.model, ':', '-') }}-${{ github.run_number }}
           path: ollama-models-export/
           retention-days: 90
           compression-level: 0
@@ -211,4 +211,5 @@ jobs:
           echo "   GitHub → Actions → This workflow → Artifacts"
           echo ""
           echo "📥 Artifact name:"
-          echo "   ollama-model-${{ github.event.inputs.model }}-${{ github.run_number }}"
+          MODEL_NAME=$(echo "${{ github.event.inputs.model }}" | tr ':' '-')
+          echo "   ollama-model-${MODEL_NAME}-${{ github.run_number }}"
