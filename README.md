@@ -1,6 +1,6 @@
 # 🤖 Ollama Models Downloader
 
-[![Download Models](https://github.com/YOUR_USERNAME/ollama-models-downloader/actions/workflows/download-ollama-models.yml/badge.svg)](https://github.com/YOUR_USERNAME/ollama-models-downloader/actions/workflows/download-ollama-models.yml)
+[![Download Models](https://github.com/sumca1/ollama-models-downloader/actions/workflows/download-ollama-models.yml/badge.svg)](https://github.com/sumca1/ollama-models-downloader/actions/workflows/download-ollama-models.yml)
 
 **הורד מודלי AI של Ollama דרך GitHub Actions - בלי חסימות NetFree!**
 
