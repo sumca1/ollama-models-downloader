@@ -6,11 +6,11 @@ on:
       model:
         description: 'Model to download'
         required: true
-        default: 'llama3.1:8b'
+        default: 'mistral:7b'
         type: choice
         options:
-          - 'llama3.1:8b'
           - 'mistral:7b'
+          - 'llama3.1:8b'
           - 'llama3.1:70b'
           - 'mixtral:8x7b'
           - 'llava:13b'
@@ -26,6 +26,9 @@ on:
 jobs:
   download-models:
     runs-on: ubuntu-latest
+    # Note: Free tier has 14GB disk. For larger models, consider:
+    # runs-on: ubuntu-latest-4-cores (25GB) or ubuntu-latest-8-cores (75GB)
+    # But these require GitHub Teams/Enterprise plan
     
     steps:
       - name: Checkout repository
