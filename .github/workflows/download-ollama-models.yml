@@ -31,6 +31,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check disk space
+        run: |
+          echo "💾 Available disk space:"
+          df -h
+          echo ""
+          echo "📊 /home/runner space:"
+          df -h /home/runner | tail -1 | awk '{print "Free: " $4 " / Total: " $2}'
+
       - name: Install Ollama
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
@@ -51,12 +59,15 @@ jobs:
         run: |
           mkdir -p ollama-models-export
           
-          # Copy Ollama models directory
-          sudo cp -r /usr/share/ollama/.ollama/models ollama-models-export/
+          echo "📦 Creating tar archive directly..."
+          # Create tar directly from source (saves disk space)
+          sudo tar -czf ollama-models-export/models.tar.gz -C /usr/share/ollama/.ollama models/
           
-          # Create tar archive
+          # Delete original models to free space
+          echo "🧹 Cleaning up original models..."
+          sudo rm -rf /usr/share/ollama/.ollama/models/*
+          
           cd ollama-models-export
-          tar -czf models.tar.gz models/
           
           # Get size info
           TOTAL_SIZE_MB=$(du -sm models.tar.gz | cut -f1)
@@ -91,7 +102,10 @@ jobs:
             
             CHUNKS=$(ls models.tar.gz.part_* | wc -l)
             echo "📦 Created $CHUNKS chunks"
-            rm models.tar.gz
+            
+            # Delete original large file to save space
+            rm -f models.tar.gz
+            echo "🧹 Cleaned up original archive"
             
             echo '#!/bin/bash' > reassemble.sh
             echo 'echo "Reassembling archive..."' >> reassemble.sh
