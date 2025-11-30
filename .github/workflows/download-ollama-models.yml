@@ -55,58 +55,28 @@ jobs:
           ollama pull $MODEL
           echo "✅ Download complete!"
           
-      - name: Export model to tar archive
+      - name: Export and split model directly
         run: |
           mkdir -p ollama-models-export
-          
-          echo "📦 Creating tar archive directly..."
-          # Create tar directly from source (saves disk space)
-          sudo tar -czf ollama-models-export/models.tar.gz -C /usr/share/ollama/.ollama models/
-          
-          # Delete original models to free space
-          echo "🧹 Cleaning up original models..."
-          sudo rm -rf /usr/share/ollama/.ollama/models/*
-          
-          cd ollama-models-export
-          
-          # Get size info
-          TOTAL_SIZE_MB=$(du -sm models.tar.gz | cut -f1)
-          echo "📦 Archive size: ${TOTAL_SIZE_MB}MB"
-          
-          # Create metadata file
-          cat > METADATA.json << EOF
-          {
-            "downloaded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "model": "${{ github.event.inputs.model }}",
-            "ollama_version": "$(ollama --version | head -n1)",
-            "total_size_mb": ${TOTAL_SIZE_MB},
-            "chunk_size_mb": ${{ github.event.inputs.chunk_size_mb }}
-          }
-          EOF
-          
-          cd ..
-          
-      - name: Split large archives (if needed)
-        run: |
           cd ollama-models-export
           
           CHUNK_SIZE_MB=${{ github.event.inputs.chunk_size_mb }}
-          TOTAL_SIZE_MB=$(du -sm models.tar.gz | cut -f1)
           
-          echo "📊 Total size: ${TOTAL_SIZE_MB}MB"
-          echo "📏 Chunk size: ${CHUNK_SIZE_MB}MB"
+          echo "📦 Creating tar and splitting in one go (saves space)..."
+          # Create tar and pipe directly to split - no intermediate file!
+          sudo tar -czf - -C /usr/share/ollama/.ollama models/ | split -b ${CHUNK_SIZE_MB}M - models.tar.gz.part_
           
-          if [ "$TOTAL_SIZE_MB" -gt "$CHUNK_SIZE_MB" ]; then
-            echo "✂️ Splitting archive into chunks..."
-            split -b ${CHUNK_SIZE_MB}M models.tar.gz models.tar.gz.part_
+          echo "🧹 Cleaning up original models..."
+          sudo rm -rf /usr/share/ollama/.ollama/models/*
+          
+          # Count chunks
+          CHUNKS=$(ls -1 models.tar.gz.part_* 2>/dev/null | wc -l)
+          
+          if [ "$CHUNKS" -gt 1 ]; then
+            echo "✂️ Created $CHUNKS chunks"
+            TOTAL_SIZE_MB=$(du -sm . | cut -f1)
             
-            CHUNKS=$(ls models.tar.gz.part_* | wc -l)
-            echo "📦 Created $CHUNKS chunks"
-            
-            # Delete original large file to save space
-            rm -f models.tar.gz
-            echo "🧹 Cleaned up original archive"
-            
+            # Create reassembly scripts
             echo '#!/bin/bash' > reassemble.sh
             echo 'echo "Reassembling archive..."' >> reassemble.sh
             echo 'cat models.tar.gz.part_* > models.tar.gz' >> reassemble.sh
@@ -120,14 +90,27 @@ jobs:
             echo 'Write-Host "Extracting..." -ForegroundColor Cyan' >> reassemble.ps1
             echo 'tar -xzf models.tar.gz -C $env:USERPROFILE\.ollama\' >> reassemble.ps1
             echo 'Write-Host "Done!" -ForegroundColor Green' >> reassemble.ps1
-            
-            echo "total_chunks=$CHUNKS" >> $GITHUB_ENV
           else
-            echo "📦 No splitting needed"
-            echo "total_chunks=1" >> $GITHUB_ENV
+            echo "📦 Single file (no splitting needed)"
+            mv models.tar.gz.part_aa models.tar.gz
+            TOTAL_SIZE_MB=$(du -sm models.tar.gz | cut -f1)
           fi
           
+          # Create metadata
+          cat > METADATA.json << EOF
+          {
+            "downloaded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "model": "${{ github.event.inputs.model }}",
+            "ollama_version": "$(ollama --version | head -n1)",
+            "total_size_mb": ${TOTAL_SIZE_MB},
+            "chunks": ${CHUNKS}
+          }
+          EOF
+          
+          echo "📊 Total size: ${TOTAL_SIZE_MB}MB in $CHUNKS part(s)"
           cd ..
+          
+
           
       - name: Create README
         run: |
