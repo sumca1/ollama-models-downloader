@@ -1,0 +1,214 @@
+name: Download Ollama Models (Offline Build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Model to download'
+        required: true
+        default: 'llama3.1:8b'
+        type: choice
+        options:
+          - 'llama3.1:8b'
+          - 'mistral:7b'
+          - 'llama3.1:70b'
+          - 'mixtral:8x7b'
+          - 'llava:13b'
+          - 'codellama:34b'
+          - 'qwen2.5:72b'
+          - 'deepseek-coder:33b'
+      chunk_size_mb:
+        description: 'Split size in MB (max 2000 for GitHub)'
+        required: false
+        default: '1900'
+        type: string
+
+jobs:
+  download-models:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          
+      - name: Start Ollama service
+        run: |
+          ollama serve &
+          sleep 5
+          
+      - name: Download model
+        run: |
+          MODEL="${{ github.event.inputs.model }}"
+          echo "📥 Downloading $MODEL..."
+          ollama pull $MODEL
+          echo "✅ Download complete!"
+          
+      - name: Export model to tar archive
+        run: |
+          mkdir -p ollama-models-export
+          
+          # Copy Ollama models directory
+          sudo cp -r /usr/share/ollama/.ollama/models ollama-models-export/
+          
+          # Create tar archive
+          cd ollama-models-export
+          tar -czf models.tar.gz models/
+          
+          # Get size info
+          TOTAL_SIZE_MB=$(du -sm models.tar.gz | cut -f1)
+          echo "📦 Archive size: ${TOTAL_SIZE_MB}MB"
+          
+          # Create metadata file
+          cat > METADATA.json << EOF
+          {
+            "downloaded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "model": "${{ github.event.inputs.model }}",
+            "ollama_version": "$(ollama --version | head -n1)",
+            "total_size_mb": ${TOTAL_SIZE_MB},
+            "chunk_size_mb": ${{ github.event.inputs.chunk_size_mb }}
+          }
+          EOF
+          
+          cd ..
+          
+      - name: Split large archives (if needed)
+        run: |
+          cd ollama-models-export
+          
+          CHUNK_SIZE_MB=${{ github.event.inputs.chunk_size_mb }}
+          TOTAL_SIZE_MB=$(du -sm models.tar.gz | cut -f1)
+          
+          echo "📊 Total size: ${TOTAL_SIZE_MB}MB"
+          echo "📏 Chunk size: ${CHUNK_SIZE_MB}MB"
+          
+          if [ "$TOTAL_SIZE_MB" -gt "$CHUNK_SIZE_MB" ]; then
+            echo "✂️ Splitting archive into chunks..."
+            split -b ${CHUNK_SIZE_MB}M models.tar.gz models.tar.gz.part_
+            
+            CHUNKS=$(ls models.tar.gz.part_* | wc -l)
+            echo "📦 Created $CHUNKS chunks"
+            rm models.tar.gz
+            
+            echo '#!/bin/bash' > reassemble.sh
+            echo 'echo "Reassembling archive..."' >> reassemble.sh
+            echo 'cat models.tar.gz.part_* > models.tar.gz' >> reassemble.sh
+            echo 'echo "Extracting..."' >> reassemble.sh
+            echo 'tar -xzf models.tar.gz -C ~/.ollama/' >> reassemble.sh
+            echo 'echo "Done!"' >> reassemble.sh
+            chmod +x reassemble.sh
+            
+            echo 'Write-Host "Reassembling..." -ForegroundColor Cyan' > reassemble.ps1
+            echo 'Get-ChildItem models.tar.gz.part_* | Sort-Object | Get-Content -Raw -AsByteStream | Set-Content models.tar.gz -AsByteStream' >> reassemble.ps1
+            echo 'Write-Host "Extracting..." -ForegroundColor Cyan' >> reassemble.ps1
+            echo 'tar -xzf models.tar.gz -C $env:USERPROFILE\.ollama\' >> reassemble.ps1
+            echo 'Write-Host "Done!" -ForegroundColor Green' >> reassemble.ps1
+            
+            echo "total_chunks=$CHUNKS" >> $GITHUB_ENV
+          else
+            echo "📦 No splitting needed"
+            echo "total_chunks=1" >> $GITHUB_ENV
+          fi
+          
+          cd ..
+          
+      - name: Create README
+        run: |
+          cat > ollama-models-export/README.md << 'EOF'
+          # 🤖 Ollama Model: ${{ github.event.inputs.model }}
+          
+          ## 📦 Package Contents
+          
+          - **Model**: `${{ github.event.inputs.model }}`
+          - **Downloaded**: $(date -u +%Y-%m-%d)
+          - **Split chunks**: See METADATA.json
+          
+          ## 📥 Installation Instructions
+          
+          ### If archive is split (multiple `.part_*` files):
+          
+          #### Windows PowerShell:
+          ```powershell
+          # Run the reassembly script
+          .\reassemble.ps1
+          ```
+          
+          #### Linux/Mac:
+          ```bash
+          # Run the reassembly script
+          chmod +x reassemble.sh
+          ./reassemble.sh
+          ```
+          
+          ### If archive is NOT split (single `models.tar.gz`):
+          
+          #### Windows:
+          ```powershell
+          tar -xzf models.tar.gz -C $env:USERPROFILE\.ollama\
+          ```
+          
+          #### Linux/Mac:
+          ```bash
+          tar -xzf models.tar.gz -C ~/.ollama/
+          ```
+          
+          ## ✅ Verify Installation
+          
+          ```bash
+          ollama list
+          ollama run ${{ github.event.inputs.model }}
+          ```
+          
+          ## 📊 Model Information
+          
+          | Model | Size | Best For |
+          |-------|------|----------|
+          | llama3.1:70b | 40GB | Hebrew, IVR, Complex tasks |
+          | mixtral:8x7b | 26GB | Fast + Smart, Multi-domain |
+          | llava:13b | 10GB | Vision AI, OCR, Images |
+          | codellama:34b | 20GB | Advanced Programming |
+          | qwen2.5:72b | 42GB | Multilingual (Hebrew+Chinese) |
+          | deepseek-coder:33b | 19GB | GPT-4 level coding |
+          | llama3.1:8b | 4.9GB | ⭐ Balanced, Recommended start |
+          | mistral:7b | 4.1GB | Lightweight, Fast tests |
+          
+          ## 🔧 Using Python Installer
+          
+          ```bash
+          python install_ollama_models.py ./ollama-models-export
+          ```
+          
+          EOF
+          
+      - name: Upload model as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ollama-model-${{ github.event.inputs.model }}-${{ github.run_number }}
+          path: ollama-models-export/
+          retention-days: 90
+          compression-level: 0
+          
+      - name: Display download summary
+        run: |
+          echo "========================================="
+          echo "✅ Model Downloaded Successfully!"
+          echo "========================================="
+          echo "📦 Model: ${{ github.event.inputs.model }}"
+          echo "📊 Total size: $(du -sh ollama-models-export | cut -f1)"
+          
+          if [ -f ollama-models-export/models.tar.gz.part_aa ]; then
+            echo "✂️ Archive was split into chunks"
+            echo "📝 Use reassemble script before extraction"
+          else
+            echo "📦 Archive is single file (no splitting needed)"
+          fi
+          
+          echo ""
+          echo "🔽 Download from:"
+          echo "   GitHub → Actions → This workflow → Artifacts"
+          echo ""
+          echo "📥 Artifact name:"
+          echo "   ollama-model-${{ github.event.inputs.model }}-${{ github.run_number }}"
