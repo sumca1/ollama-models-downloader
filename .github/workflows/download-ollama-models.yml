@@ -112,9 +112,14 @@ jobs:
           
           echo "📊 Total size: ${TOTAL_SIZE_MB}MB in $CHUNKS part(s)"
           cd ..
-          
 
-          
+      - name: Prepare artifact name
+        id: artifact_name
+        run: |
+          MODEL_NAME="${{ github.event.inputs.model }}"
+          SAFE_NAME=$(echo "$MODEL_NAME" | tr ':' '-')
+          echo "name=ollama-model-${SAFE_NAME}-${{ github.run_number }}" >> $GITHUB_OUTPUT
+
       - name: Create README
         run: |
           cat > ollama-models-export/README.md << 'EOF'
@@ -186,7 +191,7 @@ jobs:
       - name: Upload model as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ollama-model-${{ replace(github.event.inputs.model, ':', '-') }}-${{ github.run_number }}
+          name: ${{ steps.artifact_name.outputs.name }}
           path: ollama-models-export/
           retention-days: 90
           compression-level: 0
@@ -211,5 +216,4 @@ jobs:
           echo "   GitHub → Actions → This workflow → Artifacts"
           echo ""
           echo "📥 Artifact name:"
-          MODEL_NAME=$(echo "${{ github.event.inputs.model }}" | tr ':' '-')
-          echo "   ollama-model-${MODEL_NAME}-${{ github.run_number }}"
+          echo "   ${{ steps.artifact_name.outputs.name }}"
