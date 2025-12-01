@@ -195,6 +195,34 @@ jobs:
           path: ollama-models-export/
           retention-days: 90
           compression-level: 0
+
+      - name: Create Release with model files
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.artifact_name.outputs.name }}
+          name: "📦 ${{ github.event.inputs.model }} - Build #${{ github.run_number }}"
+          body: |
+            ## 🤖 Ollama Model: ${{ github.event.inputs.model }}
+            
+            **Downloaded**: $(date -u +%Y-%m-%d %H:%M:%S UTC)
+            **Size**: $(du -sh ollama-models-export | cut -f1)
+            
+            ### 📥 Download Instructions:
+            1. Download all files below
+            2. If multiple `.part_*` files exist, run `reassemble.sh` (Linux/Mac) or `reassemble.ps1` (Windows)
+            3. Extract to `~/.ollama/` directory
+            4. Run `ollama list` to verify
+            
+            ### ✅ Accessible via:
+            - 🌐 **GitHub Releases** (this page - no Actions needed!)
+            - 📦 Artifacts (GitHub Actions tab)
+            
+            Available for 90 days.
+          files: ollama-models-export/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Display download summary
         run: |
@@ -212,8 +240,9 @@ jobs:
           fi
           
           echo ""
-          echo "🔽 Download from:"
-          echo "   GitHub → Actions → This workflow → Artifacts"
+          echo "🔽 Download from (choose one):"
+          echo "   1. 🌐 GitHub Releases (Recommended - always accessible!)"
+          echo "      → Code tab → Releases (right sidebar)"
+          echo "   2. 📦 GitHub Actions → This workflow → Artifacts"
           echo ""
-          echo "📥 Artifact name:"
-          echo "   ${{ steps.artifact_name.outputs.name }}"
+          echo "📥 Release tag: ${{ steps.artifact_name.outputs.name }}"
