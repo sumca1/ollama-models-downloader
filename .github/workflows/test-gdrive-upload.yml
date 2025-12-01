@@ -1,0 +1,137 @@
+name: Test Google Drive Upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Test message to include in file'
+        required: false
+        default: 'Hello from GitHub Actions!'
+
+jobs:
+  test-upload:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create test file
+        run: |
+          echo "🧪 Creating test file..."
+          mkdir -p test-upload
+          cat > test-upload/test-file.txt << EOF
+          ╔════════════════════════════════════════════════════════╗
+          ║           Test Upload to Google Drive                  ║
+          ╠════════════════════════════════════════════════════════╣
+          ║                                                        ║
+          ║  ✅ This file was created by GitHub Actions            ║
+          ║  📅 Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")          ║
+          ║  💬 Message: ${{ github.event.inputs.test_message }}   ║
+          ║  🔧 Run: #${{ github.run_number }}                     ║
+          ║                                                        ║
+          ╚════════════════════════════════════════════════════════╝
+          
+          If you can read this file, it means:
+          ✅ GitHub Actions can create files
+          ✅ Google Drive upload worked
+          ✅ You can download from Google Drive
+          ✅ NetFree doesn't block Google Drive downloads
+          
+          Next step: Upload Ollama models the same way!
+          EOF
+          
+          echo "📄 Test file content:"
+          cat test-upload/test-file.txt
+
+      - name: Install rclone
+        run: |
+          echo "📥 Installing rclone..."
+          curl https://rclone.org/install.sh | sudo bash
+          rclone version
+
+      - name: Configure rclone for Google Drive
+        env:
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+        run: |
+          echo "🔧 Configuring rclone..."
+          
+          # Create rclone config directory
+          mkdir -p ~/.config/rclone
+          
+          # Write config from secret
+          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
+          
+          # Verify config
+          echo "✅ Configuration written"
+          rclone listremotes
+
+      - name: Upload to Google Drive
+        run: |
+          echo "📤 Uploading test file to Google Drive..."
+          
+          REMOTE_NAME="gdrive-ollama"
+          FOLDER_PATH="Ollama-Test"
+          
+          # Create folder if doesn't exist
+          rclone mkdir "${REMOTE_NAME}:${FOLDER_PATH}" || true
+          
+          # Upload file
+          rclone copy test-upload/test-file.txt "${REMOTE_NAME}:${FOLDER_PATH}/" -v
+          
+          echo "✅ Upload complete!"
+          
+          # List uploaded files
+          echo ""
+          echo "📂 Files in Google Drive folder:"
+          rclone ls "${REMOTE_NAME}:${FOLDER_PATH}/"
+
+      - name: Generate shareable link
+        run: |
+          echo "🔗 Generating shareable link..."
+          
+          REMOTE_NAME="gdrive-ollama"
+          FOLDER_PATH="Ollama-Test"
+          FILE_NAME="test-file.txt"
+          
+          # Get file ID and create link (this requires gdrive CLI or API)
+          # For now, show manual instructions
+          
+          echo ""
+          echo "╔════════════════════════════════════════════════════════╗"
+          echo "║                  UPLOAD SUCCESSFUL!                    ║"
+          echo "╠════════════════════════════════════════════════════════╣"
+          echo "║                                                        ║"
+          echo "║  ✅ File uploaded to Google Drive                      ║"
+          echo "║  📁 Location: ${FOLDER_PATH}/                          ║"
+          echo "║  📄 File: ${FILE_NAME}                                 ║"
+          echo "║                                                        ║"
+          echo "║  📥 To download:                                       ║"
+          echo "║  1. Open Google Drive                                 ║"
+          echo "║  2. Navigate to ${FOLDER_PATH} folder                  ║"
+          echo "║  3. Download ${FILE_NAME}                              ║"
+          echo "║                                                        ║"
+          echo "╚════════════════════════════════════════════════════════╝"
+
+      - name: Send notification (placeholder)
+        run: |
+          echo "📧 Email notification would be sent here"
+          echo "To: s8001145@gmail.com"
+          echo "Subject: Test file ready on Google Drive"
+          echo ""
+          echo "⚠️  Email sending will be implemented in next step"
+          echo "For now, check your Google Drive manually"
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ TEST COMPLETED SUCCESSFULLY!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Next steps:"
+          echo "1. ✅ Verify file appears in your Google Drive"
+          echo "2. ✅ Try downloading it (should not be blocked by NetFree)"
+          echo "3. ✅ If successful, we'll integrate Ollama model upload"
+          echo "4. ✅ Add email notification"
+          echo ""
