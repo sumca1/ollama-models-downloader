@@ -188,6 +188,19 @@ jobs:
           
           EOF
           
+      - name: Clean up before uploads
+        run: |
+          echo "🧹 Freeing up disk space before uploads..."
+          # Remove Ollama installation (not needed anymore)
+          sudo apt-get remove -y ollama || true
+          sudo rm -rf /usr/share/ollama
+          # Clean apt cache
+          sudo apt-get clean
+          # Remove Docker images if any
+          docker system prune -af || true
+          # Show space
+          df -h | grep -E '^Filesystem|/dev/root'
+
       - name: Upload model as artifact
         uses: actions/upload-artifact@v4
         with:
