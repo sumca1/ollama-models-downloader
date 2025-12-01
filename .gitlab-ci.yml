@@ -1,0 +1,152 @@
+# GitLab CI/CD Pipeline for Ollama Models
+# 20GB disk space - supports larger models!
+
+variables:
+  CHUNK_SIZE_MB: "900"  # Smaller chunks for GitLab (1GB artifact limit)
+
+# Only run on manual trigger
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+stages:
+  - download
+  - export
+
+download_model:
+  stage: download
+  image: ubuntu:latest
+  
+  # Manual variables (set when running pipeline)
+  # MODEL: "mistral:7b" or "llama3.1:8b"
+  
+  before_script:
+    - echo "🔍 Checking disk space..."
+    - df -h
+    - echo ""
+    - echo "💾 Available space:"
+    - df -h / | tail -1 | awk '{print "Free: " $4 " / Total: " $2}'
+    
+  script:
+    - echo "📦 Installing Ollama..."
+    - apt-get update -qq
+    - apt-get install -y curl tar gzip
+    - curl -fsSL https://ollama.com/install.sh | sh
+    
+    - echo "🚀 Starting Ollama service..."
+    - ollama serve > /dev/null 2>&1 &
+    - sleep 5
+    
+    - echo "📥 Downloading model ${MODEL}..."
+    - ollama pull ${MODEL}
+    - echo "✅ Download complete!"
+    
+    - echo "📦 Creating export directory..."
+    - mkdir -p ollama-models-export
+    - cd ollama-models-export
+    
+    - echo "🔄 Creating tar and splitting in one go (saves space)..."
+    - tar -czf - -C /usr/share/ollama/.ollama models/ | split -b ${CHUNK_SIZE_MB}M - models.tar.gz.part_
+    
+    - echo "🧹 Cleaning up original models..."
+    - rm -rf /usr/share/ollama/.ollama/models/*
+    
+    - echo "📊 Checking results..."
+    - CHUNKS=$(ls -1 models.tar.gz.part_* 2>/dev/null | wc -l)
+    - echo "Created $CHUNKS chunk(s)"
+    
+    - |
+      if [ "$CHUNKS" -gt 1 ]; then
+        echo "✂️ Archive was split into $CHUNKS chunks"
+        TOTAL_SIZE_MB=$(du -sm . | cut -f1)
+        
+        # Create reassembly scripts
+        cat > reassemble.sh << 'SCRIPT'
+      #!/bin/bash
+      echo "🔗 Reassembling model archive..."
+      cat models.tar.gz.part_* > models.tar.gz
+      echo "✅ Reassembly complete!"
+      echo "📦 Extracting to Ollama directory..."
+      tar -xzf models.tar.gz -C ~/.ollama/
+      echo "🎉 Installation complete!"
+      SCRIPT
+        chmod +x reassemble.sh
+        
+        cat > reassemble.ps1 << 'SCRIPT'
+      Write-Host "🔗 Reassembling model archive..." -ForegroundColor Cyan
+      Get-ChildItem models.tar.gz.part_* | Sort-Object Name | Get-Content -Raw -AsByteStream | Set-Content models.tar.gz -AsByteStream
+      Write-Host "✅ Reassembly complete!" -ForegroundColor Green
+      Write-Host "📦 Extracting to Ollama directory..." -ForegroundColor Cyan
+      tar -xzf models.tar.gz -C $env:USERPROFILE\.ollama\
+      Write-Host "🎉 Installation complete!" -ForegroundColor Green
+      SCRIPT
+      else
+        echo "📦 Single file (no splitting needed)"
+        mv models.tar.gz.part_aa models.tar.gz 2>/dev/null || true
+        TOTAL_SIZE_MB=$(du -sm . | cut -f1)
+      fi
+    
+    - |
+      # Create metadata
+      cat > METADATA.json << EOF
+      {
+        "downloaded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+        "model": "${MODEL}",
+        "platform": "GitLab CI/CD",
+        "total_size_mb": ${TOTAL_SIZE_MB},
+        "chunks": ${CHUNKS}
+      }
+      EOF
+    
+    - |
+      # Create README
+      cat > README.md << 'EOF'
+      # 🤖 Ollama Model Package
+      
+      ## 📦 Installation
+      
+      ### Windows PowerShell:
+      ```powershell
+      # If split into chunks:
+      .\reassemble.ps1
+      
+      # If single file:
+      tar -xzf models.tar.gz -C $env:USERPROFILE\.ollama\
+      ```
+      
+      ### Linux/Mac:
+      ```bash
+      # If split into chunks:
+      chmod +x reassemble.sh
+      ./reassemble.sh
+      
+      # If single file:
+      tar -xzf models.tar.gz -C ~/.ollama/
+      ```
+      
+      ## ✅ Verify
+      ```bash
+      ollama list
+      ollama run ${MODEL}
+      ```
+      EOF
+    
+    - echo ""
+    - echo "========================================="
+    - echo "✅ Model Export Complete!"
+    - echo "========================================="
+    - echo "📦 Model: ${MODEL}"
+    - echo "📊 Total size: ${TOTAL_SIZE_MB}MB"
+    - echo "📦 Chunks: $CHUNKS"
+    - echo "========================================="
+    
+    - cd ..
+  
+  artifacts:
+    name: "ollama-model-${MODEL}-${CI_PIPELINE_ID}"
+    paths:
+      - ollama-models-export/
+    expire_in: 7 days
+    
+  tags:
+    - docker
