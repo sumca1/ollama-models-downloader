@@ -205,10 +205,9 @@ jobs:
             ## 🤖 Ollama Model: ${{ github.event.inputs.model }}
             
             **Downloaded**: $(date -u +%Y-%m-%d %H:%M:%S UTC)
-            **Size**: $(du -sh ollama-models-export | cut -f1)
             
             ### 📥 Download Instructions:
-            1. Download all files below
+            1. Download all files below (`.part_*`, scripts, metadata)
             2. If multiple `.part_*` files exist, run `reassemble.sh` (Linux/Mac) or `reassemble.ps1` (Windows)
             3. Extract to `~/.ollama/` directory
             4. Run `ollama list` to verify
@@ -218,7 +217,13 @@ jobs:
             - 📦 Artifacts (GitHub Actions tab)
             
             Available for 90 days.
-          files: ollama-models-export/*
+          files: |
+            ollama-models-export/models.tar.gz.part_*
+            ollama-models-export/models.tar.gz
+            ollama-models-export/reassemble.sh
+            ollama-models-export/reassemble.ps1
+            ollama-models-export/METADATA.json
+            ollama-models-export/README.md
           draft: false
           prerelease: false
         env:
