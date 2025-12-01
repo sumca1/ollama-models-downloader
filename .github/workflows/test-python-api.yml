@@ -1,0 +1,172 @@
+name: Test GDrive Upload (Python API)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Test message'
+        required: false
+        default: 'Testing Python Drive API'
+
+jobs:
+  test-python-api:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          echo "📦 Installing Google Drive API..."
+          pip install --quiet google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: Create test file
+        run: |
+          echo "🧪 Creating test file..."
+          mkdir -p test-upload
+          cat > test-upload/test-python-api.txt << EOF
+          ╔════════════════════════════════════════════════════════╗
+          ║        Test Upload via Python Drive API                ║
+          ╠════════════════════════════════════════════════════════╣
+          ║  Method: Google Drive API (Python)                     ║
+          ║  Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")            ║
+          ║  Message: ${{ github.event.inputs.test_message }}     ║
+          ║  Run: #${{ github.run_number }}                       ║
+          ╚════════════════════════════════════════════════════════╝
+          EOF
+          cat test-upload/test-python-api.txt
+
+      - name: Upload to Google Drive
+        env:
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import json
+          import os
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          
+          print("🔧 Setting up Google Drive API...")
+          
+          # Load service account credentials
+          creds_json = os.environ.get('GDRIVE_CREDENTIALS')
+          if not creds_json:
+              print("❌ GDRIVE_CREDENTIALS secret not found!")
+              exit(1)
+          
+          creds_dict = json.loads(creds_json)
+          credentials = service_account.Credentials.from_service_account_info(
+              creds_dict,
+              scopes=['https://www.googleapis.com/auth/drive.file']
+          )
+          
+          service = build('drive', 'v3', credentials=credentials)
+          
+          print("📤 Uploading file...")
+          
+          file_metadata = {
+              'name': 'test-python-api.txt',
+              'description': 'Test upload from GitHub Actions via Python API'
+          }
+          
+          media = MediaFileUpload(
+              'test-upload/test-python-api.txt',
+              mimetype='text/plain'
+          )
+          
+          file = service.files().create(
+              body=file_metadata,
+              media_body=media,
+              fields='id, name, webViewLink'
+          ).execute()
+          
+          file_id = file.get('id')
+          file_name = file.get('name')
+          
+          print(f"✅ File uploaded!")
+          print(f"   ID: {file_id}")
+          print(f"   Name: {file_name}")
+          
+          # Make file publicly accessible with link
+          print("🔗 Creating shareable link...")
+          
+          permission = {
+              'type': 'anyone',
+              'role': 'reader'
+          }
+          
+          service.permissions().create(
+              fileId=file_id,
+              body=permission
+          ).execute()
+          
+          download_link = f"https://drive.google.com/uc?export=download&id={file_id}"
+          view_link = f"https://drive.google.com/file/d/{file_id}/view"
+          
+          print("")
+          print("╔════════════════════════════════════════════════════════╗")
+          print("║              UPLOAD SUCCESSFUL!                        ║")
+          print("╠════════════════════════════════════════════════════════╣")
+          print("║  ✅ File uploaded to Google Drive                      ║")
+          print(f"║  📄 File: {file_name}")
+          print(f"║  🆔 ID: {file_id}")
+          print("║                                                        ║")
+          print("║  🔗 Links:                                             ║")
+          print(f"║     View: {view_link}")
+          print(f"║     Download: {download_link}")
+          print("║                                                        ║")
+          print("╚════════════════════════════════════════════════════════╝")
+          
+          # Save links to file for next step
+          with open('drive_links.txt', 'w') as f:
+              f.write(f"FILE_ID={file_id}\n")
+              f.write(f"VIEW_LINK={view_link}\n")
+              f.write(f"DOWNLOAD_LINK={download_link}\n")
+          
+          PYTHON_SCRIPT
+
+      - name: Send email notification (simulated)
+        run: |
+          echo "📧 Email notification (to be implemented)..."
+          
+          if [ -f drive_links.txt ]; then
+            source drive_links.txt
+            
+            echo ""
+            echo "Would send email to: s8001145@gmail.com"
+            echo "Subject: Your Ollama Model is Ready!"
+            echo ""
+            echo "Body:"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Your file has been uploaded to Google Drive!"
+            echo ""
+            echo "📥 Download link:"
+            echo "$DOWNLOAD_LINK"
+            echo ""
+            echo "👁️ View in Drive:"
+            echo "$VIEW_LINK"
+            echo ""
+            echo "✅ Ready to download (not blocked by NetFree)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          fi
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ PYTHON API TEST COMPLETED!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "This method:"
+          echo "  ✅ No rclone needed"
+          echo "  ✅ No gdrive CLI needed"
+          echo "  ✅ Uses official Google API"
+          echo "  ✅ Generates direct download links"
+          echo "  ✅ Can send email notifications"

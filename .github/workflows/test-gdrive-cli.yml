@@ -1,0 +1,90 @@
+name: Test GDrive Upload (gdrive-cli)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Test message'
+        required: false
+        default: 'Testing gdrive CLI'
+
+jobs:
+  test-gdrive-cli:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create test file
+        run: |
+          echo "🧪 Creating test file..."
+          mkdir -p test-upload
+          cat > test-upload/test-gdrive-cli.txt << EOF
+          ╔════════════════════════════════════════════════════════╗
+          ║        Test Upload via gdrive CLI                      ║
+          ╠════════════════════════════════════════════════════════╣
+          ║  Method: gdrive CLI                                    ║
+          ║  Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")            ║
+          ║  Message: ${{ github.event.inputs.test_message }}     ║
+          ║  Run: #${{ github.run_number }}                       ║
+          ╚════════════════════════════════════════════════════════╝
+          EOF
+          cat test-upload/test-gdrive-cli.txt
+
+      - name: Install gdrive
+        run: |
+          echo "📥 Installing gdrive CLI..."
+          wget -q https://github.com/prasmussen/gdrive/releases/download/2.1.1/gdrive_2.1.1_linux_amd64.tar.gz
+          tar -xzf gdrive_2.1.1_linux_amd64.tar.gz
+          sudo mv gdrive /usr/local/bin/
+          sudo chmod +x /usr/local/bin/gdrive
+          gdrive version
+
+      - name: Configure gdrive
+        env:
+          GDRIVE_CONFIG: ${{ secrets.GDRIVE_CREDENTIALS }}
+        run: |
+          echo "🔧 Configuring gdrive..."
+          mkdir -p ~/.gdrive
+          echo "$GDRIVE_CONFIG" > ~/.gdrive/token_v2.json
+          echo "✅ Configuration complete"
+
+      - name: Upload to Google Drive
+        run: |
+          echo "📤 Uploading to Google Drive..."
+          gdrive upload test-upload/test-gdrive-cli.txt
+          
+          echo "✅ Upload complete!"
+          echo ""
+          echo "📂 Listing recent files:"
+          gdrive list --max 5
+
+      - name: Get shareable link
+        run: |
+          echo "🔗 Creating shareable link..."
+          FILE_ID=$(gdrive list --max 1 --query "name contains 'test-gdrive-cli'" | tail -1 | awk '{print $1}')
+          
+          if [ ! -z "$FILE_ID" ]; then
+            gdrive share $FILE_ID --role reader --type anyone
+            LINK="https://drive.google.com/file/d/${FILE_ID}/view"
+            
+            echo ""
+            echo "╔════════════════════════════════════════════════════════╗"
+            echo "║              UPLOAD SUCCESSFUL!                        ║"
+            echo "╠════════════════════════════════════════════════════════╣"
+            echo "║  ✅ File uploaded to Google Drive                      ║"
+            echo "║  🔗 Download link:                                     ║"
+            echo "║     $LINK"
+            echo "║                                                        ║"
+            echo "║  📥 Click the link to download                         ║"
+            echo "╚════════════════════════════════════════════════════════╝"
+          else
+            echo "⚠️ Could not find file ID"
+          fi
+
+      - name: Summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ gdrive CLI TEST COMPLETED!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
