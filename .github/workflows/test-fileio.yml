@@ -1,0 +1,80 @@
+name: Test Upload (File.io - Anonymous)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Test message'
+        required: false
+        default: 'Testing file.io'
+
+jobs:
+  test-fileio:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Create test file
+        run: |
+          echo "🧪 Creating test file..."
+          mkdir -p test-upload
+          cat > test-upload/test-fileio.txt << EOF
+          ╔════════════════════════════════════════════════════════╗
+          ║         Test Upload via File.io (Anonymous)            ║
+          ╠════════════════════════════════════════════════════════╣
+          ║  Method: File.io                                       ║
+          ║  Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")            ║
+          ║  Message: ${{ github.event.inputs.test_message }}     ║
+          ║                                                        ║
+          ║  💡 No account needed!                                 ║
+          ║  ⚠️  File deleted after FIRST download!                ║
+          ╚════════════════════════════════════════════════════════╝
+          EOF
+          cat test-upload/test-fileio.txt
+
+      - name: Upload to File.io
+        run: |
+          echo "📤 Uploading to file.io..."
+          
+          RESPONSE=$(curl -F "file=@test-upload/test-fileio.txt" https://file.io)
+          
+          echo "Response: $RESPONSE"
+          
+          SUCCESS=$(echo $RESPONSE | grep -o '"success":\s*true')
+          DOWNLOAD_LINK=$(echo $RESPONSE | grep -o '"link":"[^"]*"' | cut -d'"' -f4)
+          
+          if [ ! -z "$DOWNLOAD_LINK" ] && [ ! -z "$SUCCESS" ]; then
+            echo ""
+            echo "╔════════════════════════════════════════════════════════╗"
+            echo "║             FILE.IO UPLOAD SUCCESS!                    ║"
+            echo "╠════════════════════════════════════════════════════════╣"
+            echo "║  ✅ No account needed!                                 ║"
+            echo "║  ✅ Anonymous upload!                                  ║"
+            echo "║  ⚠️  File auto-deletes after FIRST download!           ║"
+            echo "║                                                        ║"
+            echo "║  📥 Download link (use once!):                         ║"
+            echo "║     $DOWNLOAD_LINK"
+            echo "║                                                        ║"
+            echo "║  ⚠️  Don't click twice - file will be gone!            ║"
+            echo "╚════════════════════════════════════════════════════════╝"
+          else
+            echo "❌ Upload failed or was blocked"
+            echo "Full response: $RESPONSE"
+          fi
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ File.io test completed!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Pros:"
+          echo "  ✅ No account needed!"
+          echo "  ✅ Accessible in NetFree (we tested)"
+          echo "  ✅ Up to 2GB free"
+          echo "  ✅ Simple API"
+          echo ""
+          echo "Cons:"
+          echo "  ⚠️ File deleted after FIRST download"
+          echo "  ⚠️ No way to re-download if failed"
+          echo "  ⚠️ Not suitable for multiple downloads"

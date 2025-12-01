@@ -1,0 +1,88 @@
+name: Test Upload (Dropbox)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Test message'
+        required: false
+        default: 'Testing Dropbox'
+
+jobs:
+  test-dropbox:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Create test file
+        run: |
+          echo "🧪 Creating test file..."
+          mkdir -p test-upload
+          cat > test-upload/test-dropbox.txt << EOF
+          ╔════════════════════════════════════════════════════════╗
+          ║           Test Upload via Dropbox API                  ║
+          ╠════════════════════════════════════════════════════════╣
+          ║  Method: Dropbox                                       ║
+          ║  Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")            ║
+          ║  Message: ${{ github.event.inputs.test_message }}     ║
+          ╚════════════════════════════════════════════════════════╝
+          EOF
+          cat test-upload/test-dropbox.txt
+
+      - name: Upload to Dropbox
+        env:
+          DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
+        run: |
+          echo "📤 Uploading to Dropbox..."
+          
+          if [ -z "$DROPBOX_ACCESS_TOKEN" ]; then
+            echo "⚠️ DROPBOX_ACCESS_TOKEN not set"
+            echo ""
+            echo "To use Dropbox:"
+            echo "1. Go to: https://www.dropbox.com/developers/apps"
+            echo "2. Create app → Scoped access → Full Dropbox"
+            echo "3. Generate access token"
+            echo "4. Add as GitHub secret: DROPBOX_ACCESS_TOKEN"
+            exit 0
+          fi
+          
+          FILE_PATH="/test-dropbox.txt"
+          
+          curl -X POST https://content.dropboxapi.com/2/files/upload \
+            --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+            --header "Dropbox-API-Arg: {\"path\": \"$FILE_PATH\",\"mode\": \"overwrite\"}" \
+            --header "Content-Type: application/octet-stream" \
+            --data-binary @test-upload/test-dropbox.txt
+          
+          echo ""
+          echo "✅ Upload complete!"
+          
+          # Create shareable link
+          echo "🔗 Creating shareable link..."
+          RESPONSE=$(curl -X POST https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings \
+            --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "{\"path\": \"$FILE_PATH\"}")
+          
+          LINK=$(echo $RESPONSE | grep -o '"url":"[^"]*"' | cut -d'"' -f4)
+          
+          if [ ! -z "$LINK" ]; then
+            # Convert to direct download link
+            DIRECT_LINK="${LINK/www.dropbox.com/dl.dropboxusercontent.com}"
+            DIRECT_LINK="${DIRECT_LINK/?dl=0/?dl=1}"
+            
+            echo ""
+            echo "╔════════════════════════════════════════════════════════╗"
+            echo "║              DROPBOX UPLOAD SUCCESS!                   ║"
+            echo "╠════════════════════════════════════════════════════════╣"
+            echo "║  📥 Download link:                                     ║"
+            echo "║     $DIRECT_LINK"
+            echo "║                                                        ║"
+            echo "╚════════════════════════════════════════════════════════╝"
+          fi
+
+      - name: Summary
+        run: |
+          echo "✅ Dropbox test completed!"
+          echo ""
+          echo "Pros: ✅ 2GB free, ✅ Simple API, ✅ Permanent storage"
+          echo "Cons: ⚠️ Need Dropbox account + token"

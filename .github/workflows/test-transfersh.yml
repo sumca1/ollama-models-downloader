@@ -1,0 +1,84 @@
+name: Test Upload (Transfer.sh - Anonymous)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Test message'
+        required: false
+        default: 'Testing transfer.sh'
+
+jobs:
+  test-transfersh:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Create test file
+        run: |
+          echo "🧪 Creating test file..."
+          mkdir -p test-upload
+          cat > test-upload/test-transfersh.txt << EOF
+          ╔════════════════════════════════════════════════════════╗
+          ║        Test Upload via Transfer.sh (Anonymous)         ║
+          ╠════════════════════════════════════════════════════════╣
+          ║  Method: Transfer.sh                                   ║
+          ║  Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")            ║
+          ║  Message: ${{ github.event.inputs.test_message }}     ║
+          ║                                                        ║
+          ║  💡 No account needed!                                 ║
+          ║  💡 No API key needed!                                 ║
+          ║  💡 Files auto-delete after 14 days                    ║
+          ╚════════════════════════════════════════════════════════╝
+          EOF
+          cat test-upload/test-transfersh.txt
+
+      - name: Upload to Transfer.sh
+        run: |
+          echo "📤 Uploading to transfer.sh (anonymous)..."
+          
+          DOWNLOAD_LINK=$(curl --upload-file test-upload/test-transfersh.txt https://transfer.sh/test-transfersh.txt)
+          
+          if [ ! -z "$DOWNLOAD_LINK" ]; then
+            echo ""
+            echo "╔════════════════════════════════════════════════════════╗"
+            echo "║           TRANSFER.SH UPLOAD SUCCESS!                  ║"
+            echo "╠════════════════════════════════════════════════════════╣"
+            echo "║  ✅ No account needed!                                 ║"
+            echo "║  ✅ No authentication needed!                          ║"
+            echo "║  ⚠️  Files deleted after 14 days                       ║"
+            echo "║                                                        ║"
+            echo "║  📥 Download link:                                     ║"
+            echo "║     $DOWNLOAD_LINK"
+            echo "║                                                        ║"
+            echo "╚════════════════════════════════════════════════════════╝"
+            
+            # Test if accessible via NetFree
+            echo ""
+            echo "🔍 Testing accessibility..."
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$DOWNLOAD_LINK")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ File is accessible (HTTP $HTTP_CODE)"
+            else
+              echo "⚠️ Got HTTP $HTTP_CODE - may be blocked"
+            fi
+          else
+            echo "❌ Upload failed!"
+          fi
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Transfer.sh test completed!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Pros:"
+          echo "  ✅ No account needed!"
+          echo "  ✅ No setup required!"
+          echo "  ✅ 10GB max file size"
+          echo "  ✅ Simple curl upload"
+          echo ""
+          echo "Cons:"
+          echo "  ⚠️ Files auto-delete after 14 days"
+          echo "  ⚠️ May be blocked by NetFree (need to test)"
